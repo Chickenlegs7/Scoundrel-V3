@@ -28,3 +28,6 @@ The app uses a service worker, so after it loads successfully once it can work o
 
 ## Illustrated card update
 This build gives every dungeon card a role-based illustration. Monster silhouettes grow more threatening as value increases, Diamond weapons scale from light to relic-class arms, and Heart potions grow in size/potency. The original rank, suit, and numeric value remain visible for fast play.
+
+## Card artwork build
+This version uses the supplied Scoundrel Poker Deck artwork for the playable cards. The source images were optimized to WebP for faster phone loading and offline caching; gameplay values and rules are unchanged.

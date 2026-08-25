@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#151515" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>Scoundrel</title>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <h1>Scoundrel</h1>
+        <p class="sub">Solo Dungeon Card Game</p>
+      </div>
+      <button id="newGameBtn" class="secondary">New Game</button>
+    </header>
+
+    <section class="stats" aria-label="Game status">
+      <div class="stat"><span>HP</span><strong id="hp">20</strong></div>
+      <div class="stat"><span>Weapon</span><strong id="weapon">None</strong></div>
+      <div class="stat"><span>Last Kill</span><strong id="lastKill">—</strong></div>
+      <div class="stat"><span>Deck</span><strong id="deckCount">0</strong></div>
+    </section>
+
+    <section class="message" id="message">Choose a card to begin.</section>
+
+    <section>
+      <div class="section-row">
+        <h2>Room</h2>
+        <span id="roomProgress">Resolve 3 of 4</span>
+      </div>
+      <div id="room" class="room" aria-live="polite"></div>
+    </section>
+
+    <section class="actions">
+      <button id="fleeBtn" class="danger">Flee Room</button>
+    </section>
+
+    <section class="log-wrap">
+      <h2>Adventure Log</h2>
+      <div id="log" class="log"></div>
+    </section>
+  </main>
+
+  <dialog id="gameOverDialog">
+    <div class="dialog-card">
+      <h2 id="gameOverTitle">Game Over</h2>
+      <p id="gameOverText"></p>
+      <button id="restartBtn">Play Again</button>
+    </div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

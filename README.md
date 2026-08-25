@@ -25,3 +25,6 @@ The app uses a service worker, so after it loads successfully once it can work o
 - Equipping a new weapon resets the restriction.
 - Only the first potion resolved in a room heals; later potions in that room are discarded.
 - Fleeing moves the current room to the bottom of the deck; you cannot flee two rooms in a row.
+
+## Illustrated card update
+This build gives every dungeon card a role-based illustration. Monster silhouettes grow more threatening as value increases, Diamond weapons scale from light to relic-class arms, and Heart potions grow in size/potency. The original rank, suit, and numeric value remain visible for fast play.

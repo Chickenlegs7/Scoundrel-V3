@@ -25,6 +25,13 @@
       <div class="stat"><span>Deck</span><strong id="deckCount">0</strong></div>
     </section>
 
+    <section class="career" aria-label="Run statistics">
+      <div class="career-stat current"><span>Last Run</span><strong id="lastScore">—</strong></div>
+      <div class="career-stat"><span>High Score</span><strong id="highScore">—</strong></div>
+      <div class="career-stat"><span>Wins</span><strong id="wins">0</strong></div>
+      <div class="career-stat"><span>Losses</span><strong id="losses">0</strong></div>
+    </section>
+
     <section class="message" id="message">Choose a card to begin.</section>
 
     <section>
@@ -49,6 +56,7 @@
     <div class="dialog-card">
       <h2 id="gameOverTitle">Game Over</h2>
       <p id="gameOverText"></p>
+      <div class="run-score">Run Score <strong id="gameOverScore">0</strong></div>
       <button id="restartBtn">Play Again</button>
     </div>
   </dialog>

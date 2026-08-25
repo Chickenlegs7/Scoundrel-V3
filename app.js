@@ -14,6 +14,39 @@ const progressEl = document.getElementById('roomProgress');
 const fleeBtn = document.getElementById('fleeBtn');
 const logEl = document.getElementById('log');
 const gameOverDialog = document.getElementById('gameOverDialog');
+const lastScoreEl = document.getElementById('lastScore');
+const highScoreEl = document.getElementById('highScore');
+const winsEl = document.getElementById('wins');
+const lossesEl = document.getElementById('losses');
+const gameOverScoreEl = document.getElementById('gameOverScore');
+
+const STATS_KEY = 'scoundrel-stats-v1';
+let careerStats = loadCareerStats();
+
+function loadCareerStats(){
+  try {
+    return { highScore:null, lastScore:null, wins:0, losses:0, ...JSON.parse(localStorage.getItem(STATS_KEY) || '{}') };
+  } catch {
+    return { highScore:null, lastScore:null, wins:0, losses:0 };
+  }
+}
+function saveCareerStats(){
+  localStorage.setItem(STATS_KEY, JSON.stringify(careerStats));
+}
+function recordRun(score, won){
+  careerStats.lastScore=score;
+  careerStats.highScore = careerStats.highScore===null ? score : Math.max(careerStats.highScore, score);
+  if(won) careerStats.wins++; else careerStats.losses++;
+  saveCareerStats();
+  renderCareerStats();
+}
+function renderCareerStats(){
+  lastScoreEl.textContent = careerStats.lastScore===null ? '—' : formatScore(careerStats.lastScore);
+  highScoreEl.textContent = careerStats.highScore===null ? '—' : formatScore(careerStats.highScore);
+  winsEl.textContent = careerStats.wins;
+  lossesEl.textContent = careerStats.losses;
+}
+function formatScore(score){ return score>0 ? `+${score}` : String(score); }
 
 function cardValue(rank){ return VALUES[rank] ?? Number(rank); }
 function buildDeck(){
@@ -107,18 +140,36 @@ function fleeRoom(){
   render();
 }
 function winGame(){
+  if(state.gameOver) return;
   state.gameOver=true;
+  const score=state.hp;
+  recordRun(score,true);
+  gameOverScoreEl.textContent=formatScore(score);
   document.getElementById('gameOverTitle').textContent='Dungeon Cleared';
   document.getElementById('gameOverText').textContent=`You survived with ${state.hp} HP remaining.`;
   gameOverDialog.showModal();
   addLog(`Victory! Cleared the dungeon with ${state.hp} HP.`);
 }
 function loseGame(card){
+  if(state.gameOver) return;
   state.gameOver=true;
+  const score=calculateLossScore(card);
+  recordRun(score,false);
+  gameOverScoreEl.textContent=formatScore(score);
   document.getElementById('gameOverTitle').textContent='You Died';
   document.getElementById('gameOverText').textContent=`The ${label(card)} ended your run.`;
   gameOverDialog.showModal();
   addLog(`Defeat. ${label(card)} reduced you to 0 HP.`);
+}
+
+function calculateLossScore(killer){
+  // On a loss, score the unresolved monsters still in the dungeon as negatives.
+  // resolveCard leaves the killing monster in the room when death occurs, so it is included here.
+  const remaining=[...state.room,...state.deck].filter(c=>c.suit==='♠' || c.suit==='♣');
+  let total=remaining.reduce((sum,c)=>sum+c.value,0);
+  // Scoundrel's final-monster penalty: if the killing monster is the only monster left, count it twice.
+  if(remaining.length===1 && remaining[0]===killer) total+=killer.value;
+  return -total;
 }
 
 function cardImagePath(card){
@@ -135,6 +186,7 @@ function render(){
   deckCountEl.textContent=state.deck.length;
   progressEl.textContent=`Resolve ${Math.max(0,3-state.resolved)} more`;
   fleeBtn.disabled=state.fledLastRoom || state.gameOver;
+  renderCareerStats();
   messageEl.textContent = state.weapon
     ? `Weapon ${label(state.weapon)}${state.lastKill!==null?` can only be used on monsters below ${state.lastKill}`:' is ready for any monster'}.`
     : 'No weapon equipped. Monsters deal their full value as damage.';

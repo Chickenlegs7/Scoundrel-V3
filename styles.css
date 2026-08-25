@@ -16,6 +16,11 @@ h2 { font-size:1rem; }
 .stat { background:#1c1c1c; border:1px solid #303030; border-radius:14px; padding:10px; text-align:center; }
 .stat span { display:block; color:#999; font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; }
 .stat strong { display:block; margin-top:4px; font-size:1.05rem; }
+.career { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:-4px 0 12px; }
+.career-stat { background:#141414; border:1px solid #292929; border-radius:12px; padding:9px 8px; text-align:center; }
+.career-stat span { display:block; color:#888; font-size:.66rem; text-transform:uppercase; letter-spacing:.05em; }
+.career-stat strong { display:block; margin-top:3px; font-size:1rem; }
+.career-stat.current strong { font-size:1.08rem; }
 .message { background:#1b1b1b; border-left:4px solid #777; padding:12px; border-radius:10px; margin:10px 0 18px; color:#ddd; min-height:44px; }
 .section-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; color:#bdbdbd; }
 #roomProgress { font-size:.85rem; }
@@ -45,6 +50,8 @@ button:disabled { opacity:.4; }
 dialog { border:none; border-radius:18px; padding:0; background:transparent; color:#fff; }
 dialog::backdrop { background:rgba(0,0,0,.72); }
 .dialog-card { width:min(360px,88vw); background:#1b1b1b; border:1px solid #333; border-radius:18px; padding:22px; text-align:center; }
-.dialog-card p { color:#bbb; margin:10px 0 18px; line-height:1.45; }
+.dialog-card p { color:#bbb; margin:10px 0 12px; line-height:1.45; }
+.run-score { margin:0 0 18px; padding:10px 12px; border-radius:12px; background:#111; color:#aaa; font-size:.85rem; text-transform:uppercase; letter-spacing:.04em; }
+.run-score strong { display:block; margin-top:3px; color:#fff; font-size:1.6rem; letter-spacing:0; }
 @media (min-width:560px) { .room { grid-template-columns:repeat(4,minmax(0,1fr)); } }
-@media (max-width:390px) { .stats { grid-template-columns:repeat(2,1fr); } .room { gap:9px; } }
+@media (max-width:390px) { .stats { grid-template-columns:repeat(2,1fr); } .career { grid-template-columns:repeat(4,1fr); gap:6px; } .career-stat { padding:8px 4px; } .career-stat span { font-size:.58rem; } .room { gap:9px; } }

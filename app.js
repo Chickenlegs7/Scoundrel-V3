@@ -19,6 +19,13 @@ const highScoreEl = document.getElementById('highScore');
 const winsEl = document.getElementById('wins');
 const lossesEl = document.getElementById('losses');
 const gameOverScoreEl = document.getElementById('gameOverScore');
+const combatDialog = document.getElementById('combatDialog');
+const combatTitleEl = document.getElementById('combatTitle');
+const combatTextEl = document.getElementById('combatText');
+const barehandBtn = document.getElementById('barehandBtn');
+const weaponAttackBtn = document.getElementById('weaponAttackBtn');
+const combatCancelBtn = document.getElementById('combatCancelBtn');
+let pendingMonsterIndex = null;
 
 const STATS_KEY = 'scoundrel-stats-v1';
 let careerStats = loadCareerStats();
@@ -72,6 +79,8 @@ function startGame(){
   addLog('Entered the dungeon with 20 HP.');
   dealRoom(true);
   gameOverDialog.close?.();
+  combatDialog.close?.();
+  pendingMonsterIndex=null;
   render();
 }
 function dealRoom(first=false){
@@ -86,31 +95,73 @@ function resolveCard(index){
   if(state.gameOver) return;
   const card=state.room[index];
   if(!card) return;
-  let resolved=true;
-  if(card.suit==='♠' || card.suit==='♣') fightMonster(card);
-  else if(card.suit==='♥') usePotion(card);
+
+  if(card.suit==='♠' || card.suit==='♣'){
+    if(state.weapon){
+      openCombatChoice(index);
+      return;
+    }
+    resolveMonster(index, false);
+    return;
+  }
+
+  if(card.suit==='♥') usePotion(card);
   else if(card.suit==='♦') equipWeapon(card);
-  if(state.gameOver) { render(); return; }
-  if(resolved){
-    state.room.splice(index,1);
-    state.resolved++;
-    if(state.resolved>=3 || (state.deck.length===0 && state.room.length===0)) finishRoom();
-    render();
-  }
+
+  state.room.splice(index,1);
+  state.resolved++;
+  if(state.resolved>=3 || (state.deck.length===0 && state.room.length===0)) finishRoom();
+  render();
 }
-function fightMonster(card){
+
+function canUseWeaponOn(card){
+  return Boolean(state.weapon && (state.lastKill===null || card.value < state.lastKill));
+}
+
+function openCombatChoice(index){
+  const card=state.room[index];
+  if(!card || !(card.suit==='♠' || card.suit==='♣')) return;
+  pendingMonsterIndex=index;
+  const weaponAllowed=canUseWeaponOn(card);
+  const weaponDamage=Math.max(0,card.value-state.weapon.value);
+  combatTitleEl.textContent=`Fight ${label(card)}`;
+  combatTextEl.innerHTML = `Bare-handed: <strong>${card.value} damage</strong>.<br>` +
+    (weaponAllowed
+      ? `${label(state.weapon)}: <strong>${weaponDamage} damage</strong>.`
+      : `${label(state.weapon)} cannot be used because this monster is not below your last weapon kill (${state.lastKill}).`);
+  barehandBtn.textContent=`Fight Bare-Handed (${card.value} dmg)`;
+  weaponAttackBtn.textContent=weaponAllowed ? `Use ${label(state.weapon)} (${weaponDamage} dmg)` : `Weapon Unavailable`;
+  weaponAttackBtn.disabled=!weaponAllowed;
+  combatDialog.showModal();
+}
+
+function resolveMonster(index, useWeapon){
+  if(state.gameOver) return;
+  const card=state.room[index];
+  if(!card) return;
+
   let damage=card.value;
-  let usedWeapon=false;
-  if(state.weapon && (state.lastKill===null || card.value < state.lastKill)){
+  if(useWeapon){
+    if(!canUseWeaponOn(card)) return;
     damage=Math.max(0,card.value-state.weapon.value);
-    usedWeapon=true;
     state.lastKill=card.value;
+    addLog(`Fought ${label(card)} with ${label(state.weapon)} and took ${damage} damage.`);
+  } else {
+    addLog(`Fought ${label(card)} bare-handed and took ${damage} damage.`);
   }
+
   state.hp-=damage;
-  if(usedWeapon) addLog(`Fought ${label(card)} with ${label(state.weapon)} and took ${damage} damage.`);
-  else if(state.weapon) addLog(`Could not use ${label(state.weapon)} on ${label(card)}; fought barehanded for ${damage} damage.`);
-  else addLog(`Fought ${label(card)} barehanded and took ${damage} damage.`);
-  if(state.hp<=0){ state.hp=0; loseGame(card); }
+  if(state.hp<=0){
+    state.hp=0;
+    loseGame(card);
+    render();
+    return;
+  }
+
+  state.room.splice(index,1);
+  state.resolved++;
+  if(state.resolved>=3 || (state.deck.length===0 && state.room.length===0)) finishRoom();
+  render();
 }
 function usePotion(card){
   if(state.potionUsedThisRoom){ addLog(`${label(card)} was discarded; only one potion can heal you per room.`); return; }
@@ -205,6 +256,25 @@ function render(){
 document.getElementById('newGameBtn').addEventListener('click',startGame);
 document.getElementById('restartBtn').addEventListener('click',startGame);
 fleeBtn.addEventListener('click',fleeRoom);
+barehandBtn.addEventListener('click',()=>{
+  if(pendingMonsterIndex===null) return;
+  const index=pendingMonsterIndex;
+  pendingMonsterIndex=null;
+  combatDialog.close();
+  resolveMonster(index,false);
+});
+weaponAttackBtn.addEventListener('click',()=>{
+  if(pendingMonsterIndex===null) return;
+  const index=pendingMonsterIndex;
+  pendingMonsterIndex=null;
+  combatDialog.close();
+  resolveMonster(index,true);
+});
+combatCancelBtn.addEventListener('click',()=>{
+  pendingMonsterIndex=null;
+  combatDialog.close();
+});
+combatDialog.addEventListener('cancel',()=>{ pendingMonsterIndex=null; });
 
 if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{})); }
 startGame();

@@ -1,0 +1,64 @@
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #101010;
+  color: #f5f5f5;
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: linear-gradient(180deg,#151515,#090909); }
+button { font: inherit; }
+.app { width: min(720px,100%); margin: 0 auto; padding: calc(16px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom)); }
+.topbar { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px; }
+h1,h2,p { margin:0; }
+h1 { font-size:1.8rem; }
+h2 { font-size:1rem; }
+.sub { color:#a7a7a7; font-size:.9rem; margin-top:2px; }
+.stats { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px; }
+.stat { background:#1c1c1c; border:1px solid #303030; border-radius:14px; padding:10px; text-align:center; }
+.stat span { display:block; color:#999; font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; }
+.stat strong { display:block; margin-top:4px; font-size:1.05rem; }
+.career { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:-4px 0 12px; }
+.career-stat { background:#141414; border:1px solid #292929; border-radius:12px; padding:9px 8px; text-align:center; }
+.career-stat span { display:block; color:#888; font-size:.66rem; text-transform:uppercase; letter-spacing:.05em; }
+.career-stat strong { display:block; margin-top:3px; font-size:1rem; }
+.career-stat.current strong { font-size:1.08rem; }
+.message { background:#1b1b1b; border-left:4px solid #777; padding:12px; border-radius:10px; margin:10px 0 18px; color:#ddd; min-height:44px; }
+.section-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; color:#bdbdbd; }
+#roomProgress { font-size:.85rem; }
+.room { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.card {
+  position:relative;
+  border:0;
+  border-radius:14px;
+  padding:0;
+  overflow:hidden;
+  background:#111;
+  box-shadow:0 8px 20px rgba(0,0,0,.34);
+  aspect-ratio:822/1122;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+}
+.card:active { transform:scale(.985); }
+.card-image { display:block; width:100%; height:100%; object-fit:cover; user-select:none; -webkit-user-drag:none; }
+.actions { display:flex; gap:10px; margin:14px 0 18px; }
+button { border:none; border-radius:12px; padding:12px 16px; background:#efefef; color:#111; font-weight:700; }
+button.secondary { background:#292929; color:#f5f5f5; border:1px solid #3b3b3b; }
+button.danger { width:100%; background:#3a1717; color:#ffdada; border:1px solid #673030; }
+button:disabled { opacity:.4; }
+.log-wrap { margin-top:8px; }
+.log { margin-top:8px; background:#151515; border:1px solid #292929; border-radius:12px; padding:10px; max-height:180px; overflow:auto; font-size:.88rem; color:#bdbdbd; }
+.log div + div { margin-top:6px; }
+dialog { border:none; border-radius:18px; padding:0; background:transparent; color:#fff; }
+dialog::backdrop { background:rgba(0,0,0,.72); }
+.dialog-card { width:min(360px,88vw); background:#1b1b1b; border:1px solid #333; border-radius:18px; padding:22px; text-align:center; }
+.dialog-card p { color:#bbb; margin:10px 0 12px; line-height:1.45; }
+.run-score { margin:0 0 18px; padding:10px 12px; border-radius:12px; background:#111; color:#aaa; font-size:.85rem; text-transform:uppercase; letter-spacing:.04em; }
+.run-score strong { display:block; margin-top:3px; color:#fff; font-size:1.6rem; letter-spacing:0; }
+@media (min-width:560px) { .room { grid-template-columns:repeat(4,minmax(0,1fr)); } }
+@media (max-width:390px) { .stats { grid-template-columns:repeat(2,1fr); } .career { grid-template-columns:repeat(4,1fr); gap:6px; } .career-stat { padding:8px 4px; } .career-stat span { font-size:.58rem; } .room { gap:9px; } }
+
+.combat-options { display:grid; gap:10px; margin-top:16px; }
+.combat-option { width:100%; min-height:48px; }
+.combat-option.barehand { background:#3a1717; color:#ffdada; border:1px solid #673030; }
+.combat-option.weapon-attack { background:#efefef; color:#111; }
+.combat-cancel { width:100%; }
+.combat-dialog-card .combat-note { display:block; margin-top:5px; color:#888; font-size:.82rem; }

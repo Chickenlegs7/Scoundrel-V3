@@ -45,8 +45,55 @@ const PERM={
 };
 let state=null;
 function blankRanks(){return{vitality:0,might:0,guard:0,recovery:0,mastery:0}}
-let meta=(()=>{let m={};try{m=JSON.parse(localStorage.getItem('delverMeta'))||{}}catch{};m.wins=m.wins||0;m.losses=m.losses||0;m.ashenCleared=!!m.ashenCleared;m.shards=m.shards||0;m.expeditions=m.expeditions||0;m.deaths=m.deaths||m.losses||0;m.bossKills=m.bossKills||m.wins||0;m.bestFloor=m.bestFloor||0;m.ranks=m.ranks||{};m.gold=m.gold||0;m.inventory=m.inventory||[];m.equipment=m.equipment||{};m.potions=m.potions||0;m.verdantCleared=!!m.verdantCleared;m.bestFloors=m.bestFloors||{ashen:m.bestFloor||0,verdant:0};for(const id of Object.keys(CLASSES)){m.ranks[id]={...blankRanks(),...(m.ranks[id]||{})};m.equipment[id]=m.equipment[id]||{weapon:null,armor:null}}return m})();
-const saveMeta=()=>localStorage.setItem('delverMeta',JSON.stringify(meta));
+const SAVE_KEY='delverMeta';
+const SAVE_SCHEMA=3;
+const BACKUP_KEYS=['delverMetaBackup1','delverMetaBackup2','delverMetaBackup3'];
+
+function blankMeta(){
+ return {schemaVersion:SAVE_SCHEMA,wins:0,losses:0,ashenCleared:false,verdantCleared:false,shards:0,gold:0,potions:0,expeditions:0,deaths:0,bossKills:0,bestFloor:0,bestFloors:{ashen:0,verdant:0},ranks:{},inventory:[],equipment:{},recoveryUsed:false};
+}
+function normalizeMeta(input={}){
+ const m={...blankMeta(),...(input||{})};
+ m.schemaVersion=SAVE_SCHEMA;
+ m.wins=Number(m.wins)||0;m.losses=Number(m.losses)||0;
+ m.ashenCleared=!!m.ashenCleared;m.verdantCleared=!!m.verdantCleared;
+ m.shards=Number(m.shards)||0;m.gold=Number(m.gold)||0;m.potions=Number(m.potions)||0;
+ m.expeditions=Number(m.expeditions)||0;m.deaths=Number(m.deaths)||(Number(m.losses)||0);
+ m.bossKills=Number(m.bossKills)||(Number(m.wins)||0);m.bestFloor=Number(m.bestFloor)||0;
+ m.bestFloors={ashen:m.bestFloor||0,verdant:0,...(m.bestFloors||{})};
+ m.ranks=m.ranks||{};m.inventory=Array.isArray(m.inventory)?m.inventory:[];m.equipment=m.equipment||{};
+ for(const id of Object.keys(CLASSES)){
+   m.ranks[id]={...blankRanks(),...(m.ranks[id]||{})};
+   for(const k of Object.keys(blankRanks()))m.ranks[id][k]=Math.max(0,Number(m.ranks[id][k])||0);
+   m.equipment[id]={weapon:null,armor:null,...(m.equipment[id]||{})};
+ }
+ return m;
+}
+function rotateBackup(raw){
+ if(!raw)return;
+ try{
+   localStorage.setItem(BACKUP_KEYS[2],localStorage.getItem(BACKUP_KEYS[1])||'');
+   localStorage.setItem(BACKUP_KEYS[1],localStorage.getItem(BACKUP_KEYS[0])||'');
+   localStorage.setItem(BACKUP_KEYS[0],raw);
+ }catch{}
+}
+function loadMeta(){
+ let raw=null,parsed={};
+ try{raw=localStorage.getItem(SAVE_KEY);parsed=raw?JSON.parse(raw):{}}catch{}
+ if(raw)rotateBackup(raw);
+ const migrated=normalizeMeta(parsed);
+ try{localStorage.setItem(SAVE_KEY,JSON.stringify(migrated))}catch{}
+ return migrated;
+}
+let meta=loadMeta();
+function saveMeta(){
+ try{
+   const previous=localStorage.getItem(SAVE_KEY);
+   if(previous)rotateBackup(previous);
+   meta=normalizeMeta(meta);
+   localStorage.setItem(SAVE_KEY,JSON.stringify(meta));
+ }catch{}
+}
 function loreEntries(){
  const entries=[
   {title:'The Ember Below',unlocked:true,text:'Long ago, the kingdoms sealed their dead beneath stone and prayer. Then the first Ember rose from a forgotten grave — warm, bright, and carrying memories that did not belong to the living. Now the old places are waking. Delvers descend where armies will not, returning with Ember Shards and fragments of whatever truth sleeps below.'},
@@ -66,9 +113,57 @@ function chronicle(){
 }
 function shell(content){root.innerHTML=`<div class="app"><div class="top"><a class="back" href="../">‹ Games</a><div class="brand">DELVER</div><span></span></div>${content}</div>`}
 function equipped(cid,slot){const id=meta.equipment[cid]?.[slot];return id?GEAR[id]:null}
+
+function saveManagement(){
+ shell(`<h1 class="screen-title">Save Management</h1>
+ <p class="muted">Delver saves locally on this device. Export a backup before major updates or moving to another phone.</p>
+ <section class="panel"><div class="kicker">SAVE SCHEMA ${SAVE_SCHEMA}</div><h2>Backup & Transfer</h2>
+ <div class="save-actions"><button class="primary" id="exportSave">Export Save File</button><label class="file-button">Import Save File<input id="importSave" type="file" accept=".json,application/json"></label></div>
+ <p class="muted">Import replaces the active Delver save after first backing up the current one.</p></section>
+ <section class="panel"><h2>Automatic Backups</h2><p>Delver now keeps three rotating local backups whenever progression is saved.</p><button class="ghost" id="restoreBackup" ${localStorage.getItem(BACKUP_KEYS[0])?'':'disabled'}>Restore Latest Local Backup</button></section>
+ <section class="panel recovery-panel"><div class="kicker">V2.2 RECOVERY</div><h2>Restore My Previous Warrior</h2><p>Restores the playtest progression recorded before the V3 storage issue: 29 expeditions, 4 Ashen clears, and Warrior ranks Vitality 3 / Might 4 / Guard 5 / Recovery 2 / Mastery 3.</p><button class="danger-soft" id="recoverV22" ${meta.recoveryUsed?'disabled':''}>${meta.recoveryUsed?'Recovery Already Used':'Restore My V2.2 Progress'}</button></section>
+ <button class="ghost" id="saveBack">Back to Emberfall</button>`);
+ document.getElementById('exportSave').onclick=exportSave;
+ document.getElementById('importSave').onchange=importSaveFile;
+ document.getElementById('restoreBackup').onclick=restoreLatestBackup;
+ document.getElementById('recoverV22').onclick=recoverV22;
+ document.getElementById('saveBack').onclick=city;
+}
+function exportSave(){
+ const payload={game:'Delver',schemaVersion:SAVE_SCHEMA,exportedAt:new Date().toISOString(),meta:normalizeMeta(meta)};
+ const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+ const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`delver-save-${new Date().toISOString().slice(0,10)}.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function importSaveFile(ev){
+ const file=ev.target.files?.[0];if(!file)return;
+ const reader=new FileReader();
+ reader.onload=()=>{try{
+   const data=JSON.parse(reader.result);const incoming=data.meta||data;
+   if(!incoming||typeof incoming!=='object'||!incoming.ranks)throw new Error('Invalid Delver save');
+   const current=localStorage.getItem(SAVE_KEY);if(current)rotateBackup(current);
+   meta=normalizeMeta(incoming);saveMeta();alert('Save imported successfully.');saveManagement();
+ }catch(err){alert('That file is not a valid Delver save.')}};
+ reader.readAsText(file);
+}
+function restoreLatestBackup(){
+ const raw=localStorage.getItem(BACKUP_KEYS[0]);if(!raw)return;
+ try{const current=localStorage.getItem(SAVE_KEY);if(current)rotateBackup(current);meta=normalizeMeta(JSON.parse(raw));saveMeta();alert('Latest backup restored.');saveManagement()}catch{alert('The latest backup could not be restored.')}
+}
+function recoverV22(){
+ if(meta.recoveryUsed)return;
+ const current=localStorage.getItem(SAVE_KEY);if(current)rotateBackup(current);
+ const warrior={vitality:3,might:4,guard:5,recovery:2,mastery:3};
+ meta.expeditions=Math.max(meta.expeditions,29);
+ meta.wins=Math.max(meta.wins,4);meta.bossKills=Math.max(meta.bossKills,4);
+ meta.losses=Math.max(meta.losses,25);meta.deaths=Math.max(meta.deaths,25);
+ meta.ashenCleared=true;meta.bestFloor=Math.max(meta.bestFloor,9);
+ meta.bestFloors.ashen=Math.max(meta.bestFloors.ashen||0,9);
+ for(const [k,v] of Object.entries(warrior))meta.ranks.warrior[k]=Math.max(meta.ranks.warrior[k]||0,v);
+ meta.recoveryUsed=true;saveMeta();alert('Your V2.2 Warrior progression has been restored.');saveManagement();
+}
 function city(){
- shell(`<h1 class="screen-title">Emberfall</h1><p class="story-lead">A frontier city built around the Sanctum. Delvers spend what they drag back from the dark, then prepare to descend again.</p><div class="wallet"><span>🪙 ${meta.gold} Gold</span><span>🧪 ${meta.potions} Potions</span></div><div class="city-grid"><button class="choice" id="smith"><strong>⚒️ Blacksmith</strong><span>Buy and equip persistent weapons and armor.</span></button><button class="choice" id="alchemist"><strong>🧪 Alchemist</strong><span>Buy healing potions consumed during expeditions.</span></button></div><button class="ghost" id="cityBack">Back to Dungeons</button>`);
- document.getElementById('smith').onclick=blacksmith;document.getElementById('alchemist').onclick=alchemist;document.getElementById('cityBack').onclick=menu;
+ shell(`<h1 class="screen-title">Emberfall</h1><p class="story-lead">A frontier city built around the Sanctum. Delvers spend what they drag back from the dark, then prepare to descend again.</p><div class="wallet"><span>🪙 ${meta.gold} Gold</span><span>🧪 ${meta.potions} Potions</span></div><div class="city-grid"><button class="choice" id="smith"><strong>⚒️ Blacksmith</strong><span>Buy and equip persistent weapons and armor.</span></button><button class="choice" id="alchemist"><strong>🧪 Alchemist</strong><span>Buy healing potions consumed during expeditions.</span></button><button class="choice" id="saveManage"><strong>💾 Save Management</strong><span>Export, import, restore backups, or recover legacy progression.</span></button></div><button class="ghost" id="cityBack">Back to Dungeons</button>`);
+ document.getElementById('smith').onclick=blacksmith;document.getElementById('alchemist').onclick=alchemist;document.getElementById('saveManage').onclick=saveManagement;document.getElementById('cityBack').onclick=menu;
 }
 function blacksmith(){
  shell(`<h1 class="screen-title">The Blacksmith</h1><div class="wallet">🪙 ${meta.gold} Gold</div><p class="muted">Purchased equipment is permanent. Each adventurer equips their own weapon and armor.</p><div class="shop">${Object.entries(GEAR).map(([id,g])=>{const owned=meta.inventory.includes(id);return `<button class="upgrade" data-buygear="${id}" ${owned||meta.gold<g.price?'disabled':''}><strong>${g.name} · ${g.slot}</strong><span>${g.desc}</span><span class="loot">${owned?'OWNED':`${g.price} 🪙`}</span></button>`}).join('')}</div><div class="section-label">Equipment</div>${Object.entries(CLASSES).map(([cid,c])=>`<section class="panel equipment-card"><strong>${c.icon} ${c.name}</strong><div class="equip-row"><button data-equip="${cid}:weapon">${equipped(cid,'weapon')?.name||'No Weapon'}</button><button data-equip="${cid}:armor">${equipped(cid,'armor')?.name||'No Armor'}</button></div></section>`).join('')}<button class="ghost" id="smithBack">Back to City</button>`);
@@ -84,7 +179,7 @@ function chooseEquipment(cid,slot){
 function alchemist(){
  const price=28;shell(`<h1 class="screen-title">The Alchemist</h1><div class="wallet"><span>🪙 ${meta.gold} Gold</span><span>🧪 ${meta.potions} Potions</span></div><section class="panel"><h2>Healing Potion</h2><p>Restore 8 HP during an expedition. Potions are consumed permanently when used.</p><button class="primary" id="buyPotion" ${meta.gold<price?'disabled':''}>Buy · ${price} 🪙</button></section><button class="ghost" id="alchBack">Back to City</button>`);document.getElementById('buyPotion').onclick=()=>{if(meta.gold<price)return;meta.gold-=price;meta.potions++;saveMeta();alchemist()};document.getElementById('alchBack').onclick=city;
 }
-function menu(){const known=loreEntries().filter(e=>e.unlocked).length;shell(`<section class="panel hero"><div class="kicker">SOLO DUNGEON ROGUELITE • V3.0</div><h1>Delver</h1><p class="story-lead">Two seals now call from beneath the world. Every descent brings you closer to the truth—and gives the darkness another chance to learn your name.</p><div class="wallet"><span>🔥 ${meta.shards} Embers</span><span>🪙 ${meta.gold} Gold</span><span>🧪 ${meta.potions}</span></div><div class="hero-actions"><button class="primary" id="sanctum">Sanctum</button><button class="ghost" id="city">Emberfall</button><button class="ghost" id="chronicle">Chronicle ${known}/${loreEntries().length}</button></div></section><div class="section-label">Choose Dungeon</div><section class="dungeons">${Object.values(DUNGEONS).map(d=>{const locked=d.id==='verdant'&&!meta.ashenCleared||d.locked;return `<button class="dungeon ${locked?'locked':''}" data-d="${d.id}" ${locked?'disabled':''}><strong>${d.name}${d.coming?' · Coming Soon':''}</strong><span>${d.desc}</span><span class="story-tag">${d.chapter||''}</span>${d.id==='ashen'&&meta.ashenCleared?'<span class="loot">✓ Conquered</span>':''}${d.id==='verdant'&&meta.verdantCleared?'<span class="loot">✓ Conquered</span>':''}</button>`}).join('')}</section><section class="panel" style="margin-top:14px"><strong>Career</strong><p class="muted">Expeditions: ${meta.expeditions} • Deaths: ${meta.deaths} • Boss kills: ${meta.bossKills}<br>Ashen: ${meta.bestFloors.ashen}/9 • Verdant: ${meta.bestFloors.verdant}/11</p></section>`);document.getElementById('sanctum').onclick=sanctumClass;document.getElementById('city').onclick=city;document.getElementById('chronicle').onclick=chronicle;root.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>classSelect(b.dataset.d))}
+function menu(){const known=loreEntries().filter(e=>e.unlocked).length;shell(`<section class="panel hero"><div class="kicker">SOLO DUNGEON ROGUELITE • V3.1</div><h1>Delver</h1><p class="story-lead">Two seals now call from beneath the world. Every descent brings you closer to the truth—and gives the darkness another chance to learn your name.</p><div class="wallet"><span>🔥 ${meta.shards} Embers</span><span>🪙 ${meta.gold} Gold</span><span>🧪 ${meta.potions}</span></div><div class="hero-actions"><button class="primary" id="sanctum">Sanctum</button><button class="ghost" id="city">Emberfall</button><button class="ghost" id="chronicle">Chronicle ${known}/${loreEntries().length}</button></div></section><div class="section-label">Choose Dungeon</div><section class="dungeons">${Object.values(DUNGEONS).map(d=>{const locked=d.id==='verdant'&&!meta.ashenCleared||d.locked;return `<button class="dungeon ${locked?'locked':''}" data-d="${d.id}" ${locked?'disabled':''}><strong>${d.name}${d.coming?' · Coming Soon':''}</strong><span>${d.desc}</span><span class="story-tag">${d.chapter||''}</span>${d.id==='ashen'&&meta.ashenCleared?'<span class="loot">✓ Conquered</span>':''}${d.id==='verdant'&&meta.verdantCleared?'<span class="loot">✓ Conquered</span>':''}</button>`}).join('')}</section><section class="panel" style="margin-top:14px"><strong>Career</strong><p class="muted">Expeditions: ${meta.expeditions} • Deaths: ${meta.deaths} • Boss kills: ${meta.bossKills}<br>Ashen: ${meta.bestFloors.ashen}/9 • Verdant: ${meta.bestFloors.verdant}/11</p></section>`);document.getElementById('sanctum').onclick=sanctumClass;document.getElementById('city').onclick=city;document.getElementById('chronicle').onclick=chronicle;root.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>classSelect(b.dataset.d))}
 function sanctumClass(){shell(`<h1 class="screen-title">The Sanctum</h1><p class="muted">Ember Shards survive death and carry forward into future dungeons. Choose an adventurer to strengthen permanently.</p><div class="shard-bank">🔥 ${meta.shards} Ember Shards</div><div class="classes">${Object.entries(CLASSES).map(([id,c])=>`<button class="class-card" data-s="${id}"><strong>${c.icon} ${c.name}</strong><span>Permanent ranks: ${Object.values(meta.ranks[id]).reduce((a,b)=>a+b,0)}</span></button>`).join('')}</div><button class="ghost" id="backMenu">Back</button>`);root.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>sanctum(b.dataset.s));document.getElementById('backMenu').onclick=menu}
 function upgradeCost(k,r){const u=PERM[k];return u.base+u.step*r}
 function sanctum(cid){const c=CLASSES[cid],r=meta.ranks[cid];shell(`<h1 class="screen-title">${c.icon} ${c.name} Sanctum</h1><div class="shard-bank">🔥 ${meta.shards} Ember Shards</div><p class="muted">These improvements persist across every dungeon. Each rank matters, but the price rises sharply as your adventurer grows.</p><div class="upgrades">${Object.entries(PERM).map(([k,u])=>{const rank=r[k],cost=upgradeCost(k,rank),max=rank>=u.max;return `<button class="upgrade" data-buy="${k}" ${max||meta.shards<cost?'disabled':''}><strong>${u.name} · Rank ${rank}/${u.max}</strong><span>${u.desc}</span><span class="loot">${max?'MAX':`Cost: ${cost} 🔥`}</span></button>`}).join('')}</div><button class="ghost" id="backSanctum">Choose Adventurer</button>`);root.querySelectorAll('[data-buy]').forEach(b=>b.onclick=()=>buyUpgrade(cid,b.dataset.buy));document.getElementById('backSanctum').onclick=sanctumClass}

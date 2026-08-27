@@ -24,3 +24,7 @@ Because the app structure changed, after deployment fully close the Home Screen 
 
 ## V2.1 update note
 This package is flattened for direct GitHub Pages upload. Delver shows “V2.1” on its menu. The service worker uses network-first loading for HTML/JS/CSS so future GitHub updates are less likely to be hidden by an old iPhone PWA cache.
+
+
+## Delver V2.2
+Long-term meta progression now supports 20+ ranks per track, stronger permanent gains, and a persistent Chronicle/story framework for future dungeons.

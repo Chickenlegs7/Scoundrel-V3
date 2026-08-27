@@ -8,3 +8,7 @@
 .lore h2{font-family:Georgia,serif;margin:6px 0 8px}.lore p{line-height:1.55;color:#c2beb4;margin-bottom:0}
 .locked-lore{opacity:.55;background:#111317}.chronicle{display:grid;gap:10px}
 @media(max-width:420px){.hero-actions{grid-template-columns:1fr}}
+
+.wallet{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:12px 0;font-weight:800}.wallet span{background:#17191e;border:1px solid #343842;border-radius:999px;padding:8px 12px}
+.city-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}.shop{display:grid;gap:9px}.equipment-card{margin:8px 0}.equip-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}
+@media(max-width:430px){.city-grid,.equip-row{grid-template-columns:1fr}}

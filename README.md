@@ -38,3 +38,12 @@ Long-term meta progression now supports 20+ ranks per track, stronger permanent 
 - Persistent weapons and armor, equipped separately by class.
 - Healing potions can be purchased and consumed during expeditions.
 - New Chronicle entries continue the seal storyline.
+
+
+## Delver V3.1 — Save Protection
+- Save schema versioning and explicit migration normalization.
+- Three rotating automatic local backups.
+- Export Delver progression to a JSON save file.
+- Import a save file on the same or another device.
+- Restore the latest local backup.
+- One-time V2.2 Warrior recovery preset: 29 expeditions, 4 Ashen clears, Vitality 3, Might 4, Guard 5, Recovery 2, Mastery 3.

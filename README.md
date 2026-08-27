@@ -28,3 +28,13 @@ This package is flattened for direct GitHub Pages upload. Delver shows “V2.1�
 
 ## Delver V2.2
 Long-term meta progression now supports 20+ ranks per track, stronger permanent gains, and a persistent Chronicle/story framework for future dungeons.
+
+
+## Delver V3.0 — Verdant Hollow
+- Chapter II: Verdant Hollow, 11 floors, unlocked by conquering Ashen Crypt.
+- New poison and regeneration enemy mechanics and The Heartroot boss.
+- Persistent Gold economy.
+- Emberfall city hub with Blacksmith and Alchemist.
+- Persistent weapons and armor, equipped separately by class.
+- Healing potions can be purchased and consumed during expeditions.
+- New Chronicle entries continue the seal storyline.

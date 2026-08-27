@@ -1,280 +1,66 @@
-const SUITS = ["♠","♣","♥","♦"];
-const NAMES = {"♠":"Monster","♣":"Monster","♥":"Potion","♦":"Weapon"};
-const VALUES = {A:14,K:13,Q:12,J:11};
-
-let state;
-
-const hpEl = document.getElementById('hp');
-const weaponEl = document.getElementById('weapon');
-const lastKillEl = document.getElementById('lastKill');
-const deckCountEl = document.getElementById('deckCount');
-const roomEl = document.getElementById('room');
-const messageEl = document.getElementById('message');
-const progressEl = document.getElementById('roomProgress');
-const fleeBtn = document.getElementById('fleeBtn');
-const logEl = document.getElementById('log');
-const gameOverDialog = document.getElementById('gameOverDialog');
-const lastScoreEl = document.getElementById('lastScore');
-const highScoreEl = document.getElementById('highScore');
-const winsEl = document.getElementById('wins');
-const lossesEl = document.getElementById('losses');
-const gameOverScoreEl = document.getElementById('gameOverScore');
-const combatDialog = document.getElementById('combatDialog');
-const combatTitleEl = document.getElementById('combatTitle');
-const combatTextEl = document.getElementById('combatText');
-const barehandBtn = document.getElementById('barehandBtn');
-const weaponAttackBtn = document.getElementById('weaponAttackBtn');
-const combatCancelBtn = document.getElementById('combatCancelBtn');
-let pendingMonsterIndex = null;
-
-const STATS_KEY = 'scoundrel-stats-v1';
-let careerStats = loadCareerStats();
-
-function loadCareerStats(){
-  try {
-    return { highScore:null, lastScore:null, wins:0, losses:0, ...JSON.parse(localStorage.getItem(STATS_KEY) || '{}') };
-  } catch {
-    return { highScore:null, lastScore:null, wins:0, losses:0 };
-  }
-}
-function saveCareerStats(){
-  localStorage.setItem(STATS_KEY, JSON.stringify(careerStats));
-}
-function recordRun(score, won){
-  careerStats.lastScore=score;
-  careerStats.highScore = careerStats.highScore===null ? score : Math.max(careerStats.highScore, score);
-  if(won) careerStats.wins++; else careerStats.losses++;
-  saveCareerStats();
-  renderCareerStats();
-}
-function renderCareerStats(){
-  lastScoreEl.textContent = careerStats.lastScore===null ? '—' : formatScore(careerStats.lastScore);
-  highScoreEl.textContent = careerStats.highScore===null ? '—' : formatScore(careerStats.highScore);
-  winsEl.textContent = careerStats.wins;
-  lossesEl.textContent = careerStats.losses;
-}
-function formatScore(score){ return score>0 ? `+${score}` : String(score); }
-
-function cardValue(rank){ return VALUES[rank] ?? Number(rank); }
-function buildDeck(){
-  const deck=[];
-  for(const suit of ["♠","♣"]){
-    for(let n=2;n<=10;n++) deck.push({suit,rank:String(n),value:n});
-    for(const r of ["J","Q","K","A"]) deck.push({suit,rank:r,value:cardValue(r)});
-  }
-  // Scoundrel uses hearts and diamonds 2-10 only; face cards and aces are removed.
-  for(const suit of ["♥","♦"]){
-    for(let n=2;n<=10;n++) deck.push({suit,rank:String(n),value:n});
-  }
-  return shuffle(deck);
-}
-function shuffle(arr){
-  const a=[...arr];
-  for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
-  return a;
-}
-function startGame(){
-  state={ hp:20,maxHp:20,weapon:null,lastKill:null,deck:buildDeck(),room:[],resolved:0, potionUsedThisRoom:false, fledLastRoom:false, gameOver:false };
-  logEl.innerHTML='';
-  addLog('Entered the dungeon with 20 HP.');
-  dealRoom(true);
-  gameOverDialog.close?.();
-  combatDialog.close?.();
-  pendingMonsterIndex=null;
-  render();
-}
-function dealRoom(first=false){
-  const needed = first ? 4 : 4-state.room.length;
-  for(let i=0;i<needed && state.deck.length;i++) state.room.push(state.deck.shift());
-  state.resolved=0;
-  state.potionUsedThisRoom=false;
-  if(!first) state.fledLastRoom=false;
-  if(state.room.length===0 && state.deck.length===0) winGame();
-}
-function resolveCard(index){
-  if(state.gameOver) return;
-  const card=state.room[index];
-  if(!card) return;
-
-  if(card.suit==='♠' || card.suit==='♣'){
-    if(state.weapon){
-      openCombatChoice(index);
-      return;
-    }
-    resolveMonster(index, false);
-    return;
-  }
-
-  if(card.suit==='♥') usePotion(card);
-  else if(card.suit==='♦') equipWeapon(card);
-
-  state.room.splice(index,1);
-  state.resolved++;
-  if(state.resolved>=3 || (state.deck.length===0 && state.room.length===0)) finishRoom();
-  render();
-}
-
-function canUseWeaponOn(card){
-  return Boolean(state.weapon && (state.lastKill===null || card.value < state.lastKill));
-}
-
-function openCombatChoice(index){
-  const card=state.room[index];
-  if(!card || !(card.suit==='♠' || card.suit==='♣')) return;
-  pendingMonsterIndex=index;
-  const weaponAllowed=canUseWeaponOn(card);
-  const weaponDamage=Math.max(0,card.value-state.weapon.value);
-  combatTitleEl.textContent=`Fight ${label(card)}`;
-  combatTextEl.innerHTML = `Bare-handed: <strong>${card.value} damage</strong>.<br>` +
-    (weaponAllowed
-      ? `${label(state.weapon)}: <strong>${weaponDamage} damage</strong>.`
-      : `${label(state.weapon)} cannot be used because this monster is not below your last weapon kill (${state.lastKill}).`);
-  barehandBtn.textContent=`Fight Bare-Handed (${card.value} dmg)`;
-  weaponAttackBtn.textContent=weaponAllowed ? `Use ${label(state.weapon)} (${weaponDamage} dmg)` : `Weapon Unavailable`;
-  weaponAttackBtn.disabled=!weaponAllowed;
-  combatDialog.showModal();
-}
-
-function resolveMonster(index, useWeapon){
-  if(state.gameOver) return;
-  const card=state.room[index];
-  if(!card) return;
-
-  let damage=card.value;
-  if(useWeapon){
-    if(!canUseWeaponOn(card)) return;
-    damage=Math.max(0,card.value-state.weapon.value);
-    state.lastKill=card.value;
-    addLog(`Fought ${label(card)} with ${label(state.weapon)} and took ${damage} damage.`);
-  } else {
-    addLog(`Fought ${label(card)} bare-handed and took ${damage} damage.`);
-  }
-
-  state.hp-=damage;
-  if(state.hp<=0){
-    state.hp=0;
-    loseGame(card);
-    render();
-    return;
-  }
-
-  state.room.splice(index,1);
-  state.resolved++;
-  if(state.resolved>=3 || (state.deck.length===0 && state.room.length===0)) finishRoom();
-  render();
-}
-function usePotion(card){
-  if(state.potionUsedThisRoom){ addLog(`${label(card)} was discarded; only one potion can heal you per room.`); return; }
-  const healed=Math.min(card.value,state.maxHp-state.hp);
-  state.hp+=healed;
-  state.potionUsedThisRoom=true;
-  addLog(`Drank ${label(card)} and healed ${healed} HP.`);
-}
-function equipWeapon(card){
-  state.weapon=card;
-  state.lastKill=null;
-  addLog(`Equipped ${label(card)}. Weapon restriction reset.`);
-}
-function finishRoom(){
-  if(state.room.length===0 && state.deck.length===0){ winGame(); return; }
-  dealRoom(false);
-}
-function fleeRoom(){
-  if(state.gameOver || state.fledLastRoom || state.room.length===0) return;
-  state.deck.push(...state.room);
-  addLog(`Fled the room. ${state.room.length} card${state.room.length===1?'':'s'} moved to the bottom of the dungeon.`);
-  state.room=[];
-  state.fledLastRoom=true;
-  state.resolved=0;
-  state.potionUsedThisRoom=false;
-  for(let i=0;i<4 && state.deck.length;i++) state.room.push(state.deck.shift());
-  render();
-}
-function winGame(){
-  if(state.gameOver) return;
-  state.gameOver=true;
-  const score=state.hp;
-  recordRun(score,true);
-  gameOverScoreEl.textContent=formatScore(score);
-  document.getElementById('gameOverTitle').textContent='Dungeon Cleared';
-  document.getElementById('gameOverText').textContent=`You survived with ${state.hp} HP remaining.`;
-  gameOverDialog.showModal();
-  addLog(`Victory! Cleared the dungeon with ${state.hp} HP.`);
-}
-function loseGame(card){
-  if(state.gameOver) return;
-  state.gameOver=true;
-  const score=calculateLossScore(card);
-  recordRun(score,false);
-  gameOverScoreEl.textContent=formatScore(score);
-  document.getElementById('gameOverTitle').textContent='You Died';
-  document.getElementById('gameOverText').textContent=`The ${label(card)} ended your run.`;
-  gameOverDialog.showModal();
-  addLog(`Defeat. ${label(card)} reduced you to 0 HP.`);
-}
-
-function calculateLossScore(killer){
-  // On a loss, score the unresolved monsters still in the dungeon as negatives.
-  // resolveCard leaves the killing monster in the room when death occurs, so it is included here.
-  const remaining=[...state.room,...state.deck].filter(c=>c.suit==='♠' || c.suit==='♣');
-  let total=remaining.reduce((sum,c)=>sum+c.value,0);
-  // Scoundrel's final-monster penalty: if the killing monster is the only monster left, count it twice.
-  if(remaining.length===1 && remaining[0]===killer) total+=killer.value;
-  return -total;
-}
-
-function cardImagePath(card){
-  const suitName = {"♠":"Spades","♣":"Clubs","♥":"Hearts","♦":"Diamonds"}[card.suit];
-  return `./cards/${suitName}-${card.rank}.webp`;
-}
-
-function label(card){ return `${card.rank}${card.suit}`; }
-function addLog(text){ const row=document.createElement('div'); row.textContent=text; logEl.prepend(row); }
-function render(){
-  hpEl.textContent=state.hp;
-  weaponEl.textContent=state.weapon?label(state.weapon):'None';
-  lastKillEl.textContent=state.lastKill??'—';
-  deckCountEl.textContent=state.deck.length;
-  progressEl.textContent=`Resolve ${Math.max(0,3-state.resolved)} more`;
-  fleeBtn.disabled=state.fledLastRoom || state.gameOver;
-  renderCareerStats();
-  messageEl.textContent = state.weapon
-    ? `Weapon ${label(state.weapon)}${state.lastKill!==null?` can only be used on monsters below ${state.lastKill}`:' is ready for any monster'}.`
-    : 'No weapon equipped. Monsters deal their full value as damage.';
-  roomEl.innerHTML='';
-  state.room.forEach((card,i)=>{
-    const btn=document.createElement('button');
-    const kind=(card.suit==='♠'||card.suit==='♣')?'monster':card.suit==='♦'?'weapon':'potion';
-    btn.className=`card ${kind}`;
-    btn.setAttribute('aria-label',`${label(card)}, ${NAMES[card.suit]}, value ${card.value}`);
-    btn.innerHTML=`<img class="card-image" src="${cardImagePath(card)}" alt="${label(card)} ${NAMES[card.suit]} card" draggable="false">`;
-    btn.addEventListener('click',()=>resolveCard(i));
-    roomEl.appendChild(btn);
-  });
-}
-
-document.getElementById('newGameBtn').addEventListener('click',startGame);
-document.getElementById('restartBtn').addEventListener('click',startGame);
-fleeBtn.addEventListener('click',fleeRoom);
-barehandBtn.addEventListener('click',()=>{
-  if(pendingMonsterIndex===null) return;
-  const index=pendingMonsterIndex;
-  pendingMonsterIndex=null;
-  combatDialog.close();
-  resolveMonster(index,false);
-});
-weaponAttackBtn.addEventListener('click',()=>{
-  if(pendingMonsterIndex===null) return;
-  const index=pendingMonsterIndex;
-  pendingMonsterIndex=null;
-  combatDialog.close();
-  resolveMonster(index,true);
-});
-combatCancelBtn.addEventListener('click',()=>{
-  pendingMonsterIndex=null;
-  combatDialog.close();
-});
-combatDialog.addEventListener('cancel',()=>{ pendingMonsterIndex=null; });
-
-if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{})); }
-startGame();
+(()=>{
+const root=document.getElementById('app');
+const DUNGEONS={
+ ashen:{id:'ashen',name:'The Ashen Crypt',desc:'An old royal tomb where the dead refuse to sleep.',floors:9,boss:'Ashen Warden'},
+ verdant:{id:'verdant',name:'Verdant Hollow',desc:'A living maze beneath strangled roots.',locked:true,coming:true},
+ frost:{id:'frost',name:'The Frostvault',desc:'Something ancient waits below the ice.',locked:true,coming:true}
+};
+const CLASSES={
+ warrior:{name:'Warrior',hp:24,damage:5,icon:'🛡️',passive:'Guarded: Defend blocks 6 damage.',ability:'Power Strike: 8 damage. 3-turn cooldown.'},
+ rogue:{name:'Rogue',hp:19,damage:6,icon:'🗡️',passive:'Opportunist: +2 damage against wounded enemies.',ability:'Vanish: avoid the next enemy attack. 3-turn cooldown.'},
+ ranger:{name:'Ranger',hp:20,damage:5,icon:'🏹',passive:'Hunter: first attack each combat deals +2.',ability:'Volley: 4 damage to every enemy. 3-turn cooldown.'},
+ mage:{name:'Mage',hp:17,damage:7,icon:'🔮',passive:'Arcane Echo: every third basic attack deals +3.',ability:'Fireball: 10 damage. 3-turn cooldown.'}
+};
+const ENEMIES=[
+ {name:'Crypt Rat',hp:10,atk:4,shards:2},{name:'Bone Thrall',hp:14,atk:5,shards:3},{name:'Grave Hound',hp:18,atk:6,shards:4},{name:'Hollow Knight',hp:23,atk:7,shards:5},{name:'Ash Acolyte',hp:21,atk:8,shards:5},{name:'Tomb Brute',hp:29,atk:9,shards:7},{name:'Grave Revenant',hp:32,atk:10,shards:8}
+];
+const RUN_UPGRADES=[
+ {name:'Stitch Wounds',text:'+2 maximum HP and recover 2 HP.',apply:s=>{s.maxHp+=2;s.hp=Math.min(s.maxHp,s.hp+2)}},
+ {name:'Honed Edge',text:'+1 basic attack damage.',apply:s=>s.damage+=1},
+ {name:'Brace',text:'Defend blocks +1 damage.',apply:s=>s.guard+=1},
+ {name:'Field Dressing',text:'Camps restore +2 additional HP.',apply:s=>s.campBonus+=2},
+ {name:'Finisher',text:'Your first basic attack in each combat deals +1 damage.',apply:s=>s.openingBonus+=1},
+ {name:'Tough Hide',text:'The first enemy hit each combat deals 1 less damage.',apply:s=>s.firstHitReduce+=1}
+];
+const PERM={
+ vitality:{name:'Vitality',desc:'+1 starting maximum HP per rank.',base:18,step:10,max:12},
+ might:{name:'Might',desc:'+1 starting damage every 2 ranks.',base:22,step:12,max:10},
+ guard:{name:'Guard',desc:'+1 Defend strength every 2 ranks.',base:18,step:10,max:10},
+ recovery:{name:'Recovery',desc:'Camps restore +1 additional HP per rank.',base:14,step:8,max:10},
+ mastery:{name:'Mastery',desc:'Class ability gains +1 damage every 2 ranks (Vanish gains +1 block).',base:24,step:14,max:10}
+};
+let state=null;
+function blankRanks(){return{vitality:0,might:0,guard:0,recovery:0,mastery:0}}
+let meta=(()=>{let m={};try{m=JSON.parse(localStorage.getItem('delverMeta'))||{}}catch{};m.wins=m.wins||0;m.losses=m.losses||0;m.ashenCleared=!!m.ashenCleared;m.shards=m.shards||0;m.expeditions=m.expeditions||0;m.deaths=m.deaths||m.losses||0;m.bossKills=m.bossKills||m.wins||0;m.bestFloor=m.bestFloor||0;m.ranks=m.ranks||{};for(const id of Object.keys(CLASSES))m.ranks[id]={...blankRanks(),...(m.ranks[id]||{})};return m})();
+const saveMeta=()=>localStorage.setItem('delverMeta',JSON.stringify(meta));
+function shell(content){root.innerHTML=`<div class="app"><div class="top"><a class="back" href="../">‹ Games</a><div class="brand">DELVER</div><span></span></div>${content}</div>`}
+function menu(){shell(`<section class="panel hero"><div class="kicker">SOLO DUNGEON ROGUELITE</div><h1>Delver</h1><p class="muted">Descend. Fall. Return stronger. Conquest is earned across many expeditions.</p><div class="shard-bank">🔥 ${meta.shards} Ember Shards</div><button class="primary" id="sanctum">Enter the Sanctum</button></section><div class="section-label">Choose Dungeon</div><section class="dungeons">${Object.values(DUNGEONS).map(d=>`<button class="dungeon ${d.locked?'locked':''}" data-d="${d.id}" ${d.locked?'disabled':''}><strong>${d.name}${d.coming?' · Coming Soon':''}</strong><span>${d.desc}</span>${d.id==='ashen'&&meta.ashenCleared?'<span class="loot">✓ Conquered</span>':''}</button>`).join('')}</section><section class="panel" style="margin-top:14px"><strong>Career</strong><p class="muted">Expeditions: ${meta.expeditions} • Deaths: ${meta.deaths}<br>Boss kills: ${meta.bossKills} • Best floor: ${meta.bestFloor}/${DUNGEONS.ashen.floors}</p></section>`);document.getElementById('sanctum').onclick=sanctumClass;root.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>classSelect(b.dataset.d))}
+function sanctumClass(){shell(`<h1 class="screen-title">The Sanctum</h1><p class="muted">Ember Shards survive death. Choose an adventurer to strengthen permanently.</p><div class="shard-bank">🔥 ${meta.shards} Ember Shards</div><div class="classes">${Object.entries(CLASSES).map(([id,c])=>`<button class="class-card" data-s="${id}"><strong>${c.icon} ${c.name}</strong><span>Permanent ranks: ${Object.values(meta.ranks[id]).reduce((a,b)=>a+b,0)}</span></button>`).join('')}</div><button class="ghost" id="backMenu">Back</button>`);root.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>sanctum(b.dataset.s));document.getElementById('backMenu').onclick=menu}
+function upgradeCost(k,r){const u=PERM[k];return u.base+u.step*r}
+function sanctum(cid){const c=CLASSES[cid],r=meta.ranks[cid];shell(`<h1 class="screen-title">${c.icon} ${c.name} Sanctum</h1><div class="shard-bank">🔥 ${meta.shards} Ember Shards</div><p class="muted">Permanent improvements are intentionally small. Every rank makes the next more expensive.</p><div class="upgrades">${Object.entries(PERM).map(([k,u])=>{const rank=r[k],cost=upgradeCost(k,rank),max=rank>=u.max;return `<button class="upgrade" data-buy="${k}" ${max||meta.shards<cost?'disabled':''}><strong>${u.name} · Rank ${rank}/${u.max}</strong><span>${u.desc}</span><span class="loot">${max?'MAX':`Cost: ${cost} 🔥`}</span></button>`}).join('')}</div><button class="ghost" id="backSanctum">Choose Adventurer</button>`);root.querySelectorAll('[data-buy]').forEach(b=>b.onclick=()=>buyUpgrade(cid,b.dataset.buy));document.getElementById('backSanctum').onclick=sanctumClass}
+function buyUpgrade(cid,k){const r=meta.ranks[cid][k],cost=upgradeCost(k,r);if(r>=PERM[k].max||meta.shards<cost)return;meta.shards-=cost;meta.ranks[cid][k]++;saveMeta();sanctum(cid)}
+function classSelect(did){const d=DUNGEONS[did];shell(`<h1 class="screen-title">${d.name}</h1><p class="muted">A fresh delver is not expected to conquer this place. Bring back what you can.</p><div class="classes">${Object.entries(CLASSES).map(([id,c])=>{const r=meta.ranks[id];const hp=c.hp+r.vitality, dmg=c.damage+Math.floor(r.might/2);return `<button class="class-card" data-c="${id}"><strong>${c.icon} ${c.name}</strong><span>${hp} HP • ${dmg} base damage</span><span class="ability">${c.passive}</span><span>${c.ability}</span><span class="loot">Permanent ranks: ${Object.values(r).reduce((a,b)=>a+b,0)}</span></button>`}).join('')}</div>`);root.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>start(did,b.dataset.c))}
+function start(did,cid){const c=CLASSES[cid],r=meta.ranks[cid];const hp=c.hp+r.vitality;meta.expeditions++;saveMeta();state={dungeon:did,classId:cid,floor:0,hp,maxHp:hp,damage:c.damage+Math.floor(r.might/2),guard:6+Math.floor(r.guard/2),campBonus:r.recovery,mastery:Math.floor(r.mastery/2),abilityCD:0,attackCount:0,upgrades:[],log:[],room:null,ap:2,block:0,avoid:false,firstAttack:true,openingBonus:0,firstHitReduce:0,firstEnemyHit:true,runShards:0,finished:false};choosePath()}
+function hud(){return `<div class="stats"><div class="stat"><span>HP</span><strong>${state.hp}/${state.maxHp}</strong></div><div class="stat"><span>AP</span><strong>${state.ap}</strong></div><div class="stat"><span>Damage</span><strong>${state.damage}</strong></div><div class="stat"><span>Embers</span><strong>🔥${state.runShards}</strong></div></div><div class="map">${Array.from({length:DUNGEONS[state.dungeon].floors},(_,i)=>`${i?'<i class="line"></i>':''}<span class="node ${i+1<state.floor?'done':i+1===state.floor?'current':''}">${i+1}</span>`).join('')}</div>${state.upgrades.length?`<div class="badges">${state.upgrades.map(x=>`<span class="badge">${x}</span>`).join('')}</div>`:''}`}
+function choosePath(){state.floor++;meta.bestFloor=Math.max(meta.bestFloor,state.floor);saveMeta();if(state.floor===DUNGEONS[state.dungeon].floors){beginCombat(true);return}const types=pick(['combat','combat','combat','treasure','camp','mystery'],3);shell(`${hud()}<section class="panel"><div class="kicker">THE PATH DIVIDES</div><h2>Choose your next room</h2><div class="choices">${types.map(t=>roomChoice(t)).join('')}</div></section>`);root.querySelectorAll('[data-room]').forEach(b=>b.onclick=()=>enterRoom(b.dataset.room))}
+function roomChoice(t){const m={combat:['⚔️','Battle','Fight for Ember Shards and a minor boon.'],treasure:['🗝️','Cache','Choose a minor boon for this run.'],camp:['🔥','Camp','Recover a modest amount of HP.'],mystery:['❓','Unknown','Risk an uncertain encounter.']}[t];return `<button class="choice" data-room="${t}"><strong>${m[0]} ${m[1]}</strong><span>${m[2]}</span></button>`}
+function enterRoom(t){if(t==='combat')beginCombat(false);else if(t==='treasure')offerUpgrades(3,choosePath);else if(t==='camp'){const h=Math.ceil(state.maxHp*.16)+state.campBonus;state.hp=Math.min(state.maxHp,state.hp+h);messageRoom('🔥','A Thin Fire',`You recover ${h} HP. The crypt does not allow a comfortable rest.`)}else mystery()}
+function messageRoom(icon,title,text){shell(`${hud()}<section class="panel result"><div class="big">${icon}</div><h2>${title}</h2><p>${text}</p><button class="primary" id="continue">Descend</button></section>`);document.getElementById('continue').onclick=choosePath}
+function mystery(){const r=Math.random();if(r<.28){const h=Math.ceil(state.maxHp*.10)+state.campBonus;state.hp=Math.min(state.maxHp,state.hp+h);messageRoom('⛲','Bloodless Fountain',`The water barely helps. Recover ${h} HP.`)}else if(r<.78){const dmg=6+state.floor+Math.floor(Math.random()*4);state.hp-=dmg;if(state.hp<=0)return lose('A hidden mechanism ends your expedition.');messageRoom('🪤','A Cruel Mechanism',`Ancient blades catch you. Lose ${dmg} HP.`)}else offerUpgrades(2,choosePath)}
+function makeEnemy(scale,boss=false){if(boss)return{name:'Ashen Warden',hp:96,maxHp:96,atk:13,boss:true,shards:30};const maxIndex=Math.min(ENEMIES.length-1,1+Math.floor(scale*.7));const minIndex=Math.min(maxIndex,Math.max(0,Math.floor((scale-2)/2)));const base={...ENEMIES[minIndex+Math.floor(Math.random()*(maxIndex-minIndex+1))]};base.hp+=Math.max(0,scale-1)*3;base.atk+=Math.floor(scale/2);base.shards+=Math.floor(scale/2);base.maxHp=base.hp;return base}
+function beginCombat(boss){let count=1;if(!boss){const chance=.30+state.floor*.055;count=Math.random()<chance?2:1;if(state.floor>=6&&Math.random()<.18)count=3}state.room={type:'combat',boss,enemies:Array.from({length:count},()=>makeEnemy(state.floor,boss)),round:1};state.ap=2;state.block=0;state.avoid=false;state.firstAttack=true;state.firstEnemyHit=true;state.log=[];renderCombat()}
+function renderCombat(msg=''){const c=CLASSES[state.classId];const alive=state.room.enemies.filter(e=>e.hp>0);shell(`${hud()}${msg?`<div class="message">${msg}</div>`:''}<section class="panel"><div class="kicker">${state.room.boss?'BOSS':'COMBAT'} • ROUND ${state.room.round}</div>${alive.map(e=>{const idx=state.room.enemies.indexOf(e);return `<div class="enemy"><div class="enemy-head"><h3>${e.boss?'👑 ':''}${e.name}</h3><strong>${e.hp}/${e.maxHp}</strong></div><div class="hpbar"><div class="hpfill" style="width:${Math.max(0,e.hp/e.maxHp*100)}%"></div></div><div class="combat-actions"><button data-attack="${idx}" ${state.ap<1?'disabled':''}>Attack</button><button data-ability="${idx}" ${state.ap<1||state.abilityCD>0?'disabled':''}>${c.ability.split(':')[0]}${state.abilityCD?` (${state.abilityCD})`:''}</button></div></div>`}).join('')}<div class="combat-actions"><button id="defend" ${state.ap<1?'disabled':''}>Defend</button><button class="primary" id="endTurn">End Turn</button></div></section><section class="panel log"><strong>Combat Log</strong>${state.log.slice(-7).reverse().map(x=>`<div>${x}</div>`).join('')}</section>`);root.querySelectorAll('[data-attack]').forEach(b=>b.onclick=()=>attack(+b.dataset.attack));root.querySelectorAll('[data-ability]').forEach(b=>b.onclick=()=>ability(+b.dataset.ability));document.getElementById('defend').onclick=defend;document.getElementById('endTurn').onclick=endTurn}
+function attack(i){const e=state.room.enemies[i];if(!e||e.hp<=0||state.ap<1)return;let dmg=state.damage;if(state.firstAttack)dmg+=state.openingBonus;if(state.classId==='rogue'&&e.hp<e.maxHp)dmg+=2;if(state.classId==='ranger'&&state.firstAttack)dmg+=2;if(state.classId==='mage'){state.attackCount++;if(state.attackCount%3===0)dmg+=3}state.firstAttack=false;e.hp-=dmg;state.ap--;state.log.push(`You hit ${e.name} for ${dmg}.`);killed(e);checkCombat()}
+function ability(i){if(state.ap<1||state.abilityCD>0)return;const e=state.room.enemies[i];if(!e)return;if(state.classId==='warrior'){const d=8+state.mastery;e.hp-=d;state.log.push(`Power Strike deals ${d} to ${e.name}.`);killed(e)}else if(state.classId==='rogue'){state.avoid=true;state.block+=state.mastery;state.log.push('You vanish into the dark.')}else if(state.classId==='ranger'){const d=4+state.mastery;state.room.enemies.filter(x=>x.hp>0).forEach(x=>{x.hp-=d;killed(x)});state.log.push(`Volley strikes every enemy for ${d}.`)}else{const d=10+state.mastery;e.hp-=d;state.log.push(`Fireball scorches ${e.name} for ${d}.`);killed(e)}state.abilityCD=3;state.ap--;checkCombat()}
+function defend(){if(state.ap<1)return;state.block+=state.guard;state.ap--;state.log.push(`You brace for ${state.guard} block.`);renderCombat()}
+function killed(e){if(e.hp<=0&&!e.dead){e.dead=true;e.hp=0;state.runShards+=e.shards||2;state.log.push(`${e.name} falls. +${e.shards||2} Ember Shards.`)}}
+function checkCombat(){if(state.room.enemies.every(e=>e.hp<=0)){if(state.room.boss)return win();return offerUpgrades(3,choosePath)}renderCombat()}
+function endTurn(){let total=0;for(const e of state.room.enemies.filter(x=>x.hp>0)){if(state.avoid){state.log.push(`You evade ${e.name}'s attack.`);state.avoid=false;continue}let dmg=e.atk;if(state.firstEnemyHit&&state.firstHitReduce){dmg=Math.max(0,dmg-state.firstHitReduce);state.firstEnemyHit=false}if(state.block){const blocked=Math.min(state.block,dmg);state.block-=blocked;dmg-=blocked}state.hp-=dmg;total+=dmg;state.log.push(`${e.name} hits for ${dmg}.`)}if(state.hp<=0)return lose('The dungeon claims another delver.');state.room.round++;state.ap=2;state.block=0;state.firstAttack=true;if(state.abilityCD>0)state.abilityCD--;renderCombat(total?`Enemies deal ${total} damage.`:'You weather the enemy assault.')}
+function offerUpgrades(n,next){const opts=pick(RUN_UPGRADES,n);shell(`${hud()}<section class="panel"><div class="kicker">MINOR BOON • THIS RUN ONLY</div><h2>Take what little help you can</h2><div class="upgrades">${opts.map((u,i)=>`<button class="upgrade" data-up="${i}"><strong>${u.name}</strong><span>${u.text}</span></button>`).join('')}</div></section>`);root.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>{const u=opts[+b.dataset.up];u.apply(state);state.upgrades.push(u.name);next()})}
+function bankShards(){meta.shards+=state.runShards;const earned=state.runShards;state.runShards=0;saveMeta();return earned}
+function win(){meta.wins++;meta.bossKills++;meta.ashenCleared=true;const earned=bankShards();endScreen(true,'The Ashen Warden finally breaks apart. The crypt is conquered.',earned)}
+function lose(text){meta.losses++;meta.deaths++;const earned=bankShards();endScreen(false,text,earned)}
+function endScreen(won,text,earned){shell(`<section class="panel result"><div class="big">${won?'🏆':'☠️'}</div><div class="kicker">${won?'DUNGEON CONQUERED':'EXPEDITION ENDED'}</div><h2>${won?'Victory':'You Have Fallen'}</h2><p>${text}</p><div class="shard-bank">🔥 ${earned} Ember Shards recovered</div><p class="muted">${CLASSES[state.classId].name} • Reached floor ${state.floor}/${DUNGEONS[state.dungeon].floors} • ${state.upgrades.length} temporary boons</p><p>Return to the Sanctum. Spend what you recovered. Then descend again.</p><button class="primary" id="sanctumEnd">Visit Sanctum</button><button class="ghost" id="again">Return to Dungeons</button></section>`);document.getElementById('sanctumEnd').onclick=()=>sanctum(state.classId);document.getElementById('again').onclick=menu}
+function pick(arr,n){const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a.slice(0,Math.min(n,a.length))}
+menu();
+})();
